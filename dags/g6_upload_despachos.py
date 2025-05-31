@@ -1,12 +1,12 @@
 from airflow.decorators import dag, task
 from pendulum import timezone
-from scripts.azure_upload_pedidos import upload_to_adls
+from scripts.azure_upload_despachos import upload_to_adls
 from scripts.helpers import add_date_suffix
 from datetime import datetime, timedelta
 
-LOCAL_FILE_PATH = "/opt/airflow/data/pedidos.csv"
+LOCAL_FILE_PATH = "/opt/airflow/data/despachos.csv"
 CONTAINER_NAME = "airflow"
-BLOB_NAME = "raw/G06/pedidos.csv"
+BLOB_NAME = "raw/G06/despachos.csv"
 
 default_args = {
     'owner': 'airflow',
@@ -15,7 +15,7 @@ default_args = {
 }
 
 @dag(
-    dag_id="g6_upload_pedidos",
+    dag_id="g6_upload_despachos",
     description="Uploads a local file to Azure Blob Storage with a date suffix.",
     default_args=default_args,
     start_date=datetime(2025, 1, 1, tzinfo=timezone("America/Bogota")),
