@@ -5,9 +5,9 @@ import os
 log = logging.getLogger('airflow.task')
 
 def upload_to_adls(
-        local_file_path = "/opt/airflow/data/sample.txt",
-        container_name = "airflow",
-        blob_name = "raw/uploaded_sample.txt",
+        local_file_path = "/opt/airflow/data/despachos.csv",
+        container_name = "datalake",
+        blob_name = "raw/airflow/g06/despachos.csv",
         wasb_conn_id = "utec_blob_storage"
         ):
     try:
