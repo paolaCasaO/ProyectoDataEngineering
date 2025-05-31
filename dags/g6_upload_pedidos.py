@@ -1,6 +1,6 @@
 from airflow.decorators import dag, task
 from pendulum import timezone
-from scripts.azure_upload import upload_to_adls
+from scripts.azure_upload_despachos import upload_to_adls
 from scripts.helpers import add_date_suffix
 from datetime import datetime, timedelta
 
