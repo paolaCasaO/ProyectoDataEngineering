@@ -7,7 +7,7 @@ Este proyecto implementa una arquitectura basada en Data Mesh para habilitar una
 
 ### 1. Arquitectura y Enfoque
 
-La solución propuesta se alinea con los principios de Data Mesh, donde cada dominio es responsable de la calidad y publicación de sus propios datos como productos. Se ha definido una arquitectura técnica que incorpora herramientas modernas del ecosistema de ingeniería de datos, asegurando:
+La solución propuesta se alinea con los principios de Data Mesh, donde cada dominio es responsable de la calidad y publicación de sus propios datos como productos. Se ha definido una arquitectura técnica que incorpora herramientas de ingeniería de datos, asegurando:
 
 - Desacoplamiento de dominios
 - Pocesamiento distribuido
@@ -18,17 +18,16 @@ La solución propuesta se alinea con los principios de Data Mesh, donde cada dom
 
 El repositorio contiene los distintos elementos técnicos utilizados:
 
-- Scripts: Transformaciones y lógica de negocio.
+- Scripts: Transformaciones.
 - DAGs (Airflow): Orquestación de pipelines de datos.
-- Notebooks (Jupyter/Colab): Análisis exploratorios y pruebas.
-- Esquemas y modelos: Estructuras de datos utilizadas para modelar los productos de datos.
+- Notebooks (Jupyter): elaboracion de bronze, silver y gold para cada dominio cubierto (comercial, marketing y operaciones).
 
 ### 3. Dominios cubiertos
 
 Se han trabajado los siguientes dominios principales:
-- Clientes
-- Pedidos
-- Despachos
+- **Marketing**: Clientes
+- **Comercial**: Pedidos
+- **Operaciones**: Despachos
 
 ### 4.Contribuciones
 
