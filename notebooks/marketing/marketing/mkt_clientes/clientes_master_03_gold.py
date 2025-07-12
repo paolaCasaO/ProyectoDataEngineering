@@ -6,97 +6,141 @@
 # COMMAND ----------
 
 
-dbutils.widgets.text('GOLD_VW_PERFIL_CLIENTES', 'g6_mkt_clientes.gold.vw_perfil_clientes')
-
-dbutils.widgets.text('SILVER_MV_CLIENTES', 'g6_mkt_clientes.silver.mv_clientes')
-
-
-# COMMAND ----------
+dbutils.widgets.text('SILVER_CLIENTES', 'g6_mkt_clientes.silver.mv_clientes')
+dbutils.widgets.text('GOLD_PERFIL_CLIENTES', 'g6_mkt_clientes.gold.vw_perfil_clientes')
+dbutils.widgets.text('GOLD_DEMANDA_PEDIDOS', 'g6_cmc_pedidos.gold.vw_demanda_pedidos')
+dbutils.widgets.text('GOLD_PUNTUALIDAD_CLIENTES', 'g6_ops_despachos.gold.vw_puntualidad_cliente')
 
 
 
 # COMMAND ----------
 
-SILVER_CLIENTES = dbutils.widgets.get("SILVER_MV_CLIENTES") 
-GOLD_VW_PERFIL_CLIENTES = dbutils.widgets.get("GOLD_VW_PERFIL_CLIENTES")
+SILVER_CLIENTES = dbutils.widgets.get("SILVER_CLIENTES") 
+GOLD_PERFIL_CLIENTES = dbutils.widgets.get("GOLD_PERFIL_CLIENTES")
+GOLD_DEMANDA_PEDIDOS = dbutils.widgets.get("GOLD_DEMANDA_PEDIDOS")
+GOLD_PUNTUALIDAD_CLIENTES = dbutils.widgets.get("GOLD_PUNTUALIDAD_CLIENTES")
 
 
 # COMMAND ----------
 
-print('SILVER_CLIENTES\t:', SILVER_MV_CLIENTES)
-print('GOLD_VW_PERFIL_CLIENTES\t:', GOLD_VW_PERFIL_CLIENTES)
+print('SILVER_CLIENTES\t:', SILVER_CLIENTES)
+print('GOLD_PERFIL_CLIENTES\t:', GOLD_PERFIL_CLIENTES)
+print('GOLD_DEMANDA_PEDIDOS\t:', GOLD_DEMANDA_PEDIDOS)
+print('GOLD_PUNTUALIDAD_CLIENTES\t:', GOLD_PUNTUALIDAD_CLIENTES)
+
+
+# COMMAND ----------
+
+# MAGIC
+# MAGIC %sql
+# MAGIC CREATE OR REPLACE VIEW ${GOLD_PERFIL_CLIENTES} 
+# MAGIC AS
+# MAGIC SELECT 
+# MAGIC   -- ========================================
+# MAGIC   -- 📋 CAMPOS ESENCIALES (MAX 10)
+# MAGIC   -- ========================================
+# MAGIC   
+# MAGIC   -- 1. Identificador único del cliente
+# MAGIC   c.cust_code,
+# MAGIC   
+# MAGIC   -- 2. Nombre/marca del cliente
+# MAGIC   c.brand_name,
+# MAGIC   
+# MAGIC   -- 3. Segmentación corporativa
+# MAGIC   c.corporative_segmentation,
+# MAGIC   
+# MAGIC   -- 4. Volumen de demanda último mes
+# MAGIC   COALESCE(d.volumen_pedido_mes, 0) as volumen_pedido_mes,
+# MAGIC   
+# MAGIC   -- 5. Puntualidad en entregas (%)
+# MAGIC   COALESCE(p.tasa_puntualidad_pct, 0) as tasa_puntualidad_pct,
+# MAGIC   
+# MAGIC   -- 6. Zona geográfica predominante
+# MAGIC   COALESCE(d.zona_predominante_mes, 'Sin Zona') as zona_principal,
+# MAGIC   
+# MAGIC   -- 7. Score operacional combinado
+# MAGIC   ROUND(
+# MAGIC     COALESCE(
+# MAGIC       (COALESCE(p.tasa_puntualidad_pct, 0) * 0.5) +           -- 50% puntualidad
+# MAGIC       (COALESCE(d.eficiencia_entrega_mes_pct, 0) * 0.3) + -- 30% eficiencia
+# MAGIC       (COALESCE(d.tasa_cumplimiento_completo_mes_pct, 0) * 0.2), -- 20% cumplimiento
+# MAGIC       0
+# MAGIC     ), 1
+# MAGIC   ) as score_operacional,
+# MAGIC   
+# MAGIC   -- 8. Clasificación final del cliente
+# MAGIC   CASE 
+# MAGIC     WHEN c.corporative_segmentation = 'PREMIUM' 
+# MAGIC          AND COALESCE(p.tasa_puntualidad_pct, 0) >= 90 
+# MAGIC          AND COALESCE(d.volumen_pedido_mes, 0) >= 1000 THEN 'VIP'
+# MAGIC     WHEN c.corporative_segmentation = 'PREMIUM' 
+# MAGIC          AND COALESCE(p.tasa_puntualidad_pct, 0) >= 75 THEN 'PREMIUM'
+# MAGIC     WHEN c.corporative_segmentation = 'CORPORATIVO' 
+# MAGIC          AND COALESCE(p.tasa_puntualidad_pct, 0) >= 80 THEN 'CORPORATIVO_A'
+# MAGIC     WHEN c.corporative_segmentation = 'CORPORATIVO' THEN 'CORPORATIVO_B'
+# MAGIC     WHEN COALESCE(d.frecuencia_actividad_mes_pct, 0) >= 80 
+# MAGIC          AND COALESCE(d.volumen_pedido_mes, 0) >= 300 THEN 'FRECUENTE'
+# MAGIC     WHEN COALESCE(p.tasa_puntualidad_pct, 0) < 50 
+# MAGIC          OR COALESCE(d.porcentaje_dias_con_alertas, 0) > 50 THEN 'RIESGO'
+# MAGIC     WHEN COALESCE(d.volumen_pedido_mes, 0) < 50 THEN 'OCASIONAL'
+# MAGIC     ELSE 'REGULAR'
+# MAGIC   END as clasificacion_cliente,
+# MAGIC   
+# MAGIC   -- 9. 
+# MAGIC   COALESCE(d.ano_pedido, 'Sin Actividad') as ultimo_periodo_activo,
+# MAGIC   
+# MAGIC   -- 10. Estado del cliente
+# MAGIC   CASE 
+# MAGIC     WHEN c.active_flg = 'Y' AND COALESCE(d.volumen_pedido_mes, 0) > 0 THEN 'ACTIVO'
+# MAGIC     WHEN c.active_flg = 'Y' AND COALESCE(d.volumen_pedido_mes, 0) = 0 THEN 'INACTIVO'
+# MAGIC     ELSE 'SUSPENDIDO'
+# MAGIC   END as estado_cliente
+# MAGIC
+# MAGIC FROM ${SILVER_CLIENTES} c
+# MAGIC
+# MAGIC -- LEFT JOIN con vista de demanda (datos más recientes por cliente)
+# MAGIC LEFT JOIN (
+# MAGIC   SELECT 
+# MAGIC     cust_code,
+# MAGIC     volumen_pedido_mes,
+# MAGIC     eficiencia_entrega_mes_pct,
+# MAGIC     tasa_cumplimiento_completo_mes_pct,
+# MAGIC     frecuencia_actividad_mes_pct,
+# MAGIC     porcentaje_dias_con_alertas,
+# MAGIC     zona_predominante_mes,
+# MAGIC     ano_pedido,
+# MAGIC     ROW_NUMBER() OVER (PARTITION BY cust_code ORDER BY ano_pedido DESC, mes_numero DESC) as rn
+# MAGIC   FROM ${GOLD_DEMANDA_PEDIDOS} 
+# MAGIC ) d ON c.cust_code = d.cust_code AND d.rn = 1
+# MAGIC
+# MAGIC -- LEFT JOIN con vista de puntualidad
+# MAGIC LEFT JOIN ${GOLD_PUNTUALIDAD_CLIENTES}  p 
+# MAGIC   ON c.cust_code = p.cust_code
+# MAGIC
+# MAGIC ORDER BY 
+# MAGIC   -- Ordenar por importancia: VIP primero, luego por score operacional
+# MAGIC   CASE clasificacion_cliente
+# MAGIC     WHEN 'VIP' THEN 1
+# MAGIC     WHEN 'PREMIUM' THEN 2
+# MAGIC     WHEN 'CORPORATIVO_A' THEN 3
+# MAGIC     WHEN 'FRECUENTE' THEN 4
+# MAGIC     WHEN 'CORPORATIVO_B' THEN 5
+# MAGIC     WHEN 'REGULAR' THEN 6
+# MAGIC     WHEN 'OCASIONAL' THEN 7
+# MAGIC     WHEN 'RIESGO' THEN 8
+# MAGIC     ELSE 9
+# MAGIC   END,
+# MAGIC   score_operacional DESC,
+# MAGIC   volumen_pedido_mes DESC;
+# MAGIC
+# MAGIC  
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC -- Vista GOLD: Análisis de puntualidad por cliente
-# MAGIC CREATE OR REPLACE VIEW ${GOLD_VW_PUNTUALIDAD_CLIENTE}
-# MAGIC COMMENT 'Vista GOLD de análisis de puntualidad y OTIF por cliente'
-# MAGIC AS
-# MAGIC SELECT 
-# MAGIC   -- Identificación del cliente
-# MAGIC   cust_code,
-# MAGIC   COUNT(DISTINCT de_obr) as obras_atendidas,
-# MAGIC   COUNT(DISTINCT plant_name) as plantas_utilizadas,
-# MAGIC   
-# MAGIC   -- Métricas de volumen
-# MAGIC   COUNT(*) as total_ordenes,
-# MAGIC   SUM(total_despachos) as total_despachos,
-# MAGIC   SUM(order_qty) as volumen_ordenado_total,
-# MAGIC   SUM(delv_qty) as volumen_entregado_total,
-# MAGIC   
-# MAGIC   -- Métricas de puntualidad (On Time)
-# MAGIC   SUM(CASE WHEN is_on_time THEN 1 ELSE 0 END) as ordenes_puntuales,
-# MAGIC   ROUND(AVG(CASE WHEN is_on_time THEN 100.0 ELSE 0.0 END), 2) as tasa_puntualidad_pct,
-# MAGIC   ROUND(AVG(delivery_delay_minutes), 1) as delay_promedio_minutos,
-# MAGIC   ROUND(STDDEV(delivery_delay_minutes), 1) as delay_desviacion_std,
-# MAGIC   
-# MAGIC   -- Métricas de cantidad (In Full)
-# MAGIC   SUM(CASE WHEN is_in_full THEN 1 ELSE 0 END) as ordenes_completas,
-# MAGIC   ROUND(AVG(CASE WHEN is_in_full THEN 100.0 ELSE 0.0 END), 2) as tasa_completitud_pct,
-# MAGIC   ROUND(AVG(qty_fill_rate), 2) as fill_rate_promedio_pct,
-# MAGIC   
-# MAGIC   -- Métricas OTIF (On Time In Full)
-# MAGIC   SUM(CASE WHEN is_otif THEN 1 ELSE 0 END) as ordenes_perfectas,
-# MAGIC   ROUND(AVG(CASE WHEN is_otif THEN 100.0 ELSE 0.0 END), 2) as tasa_otif_pct,
-# MAGIC   
-# MAGIC   -- Distribución por categoría OTIF
-# MAGIC   SUM(CASE WHEN otif_category = 'Perfect' THEN 1 ELSE 0 END) as ordenes_perfect,
-# MAGIC   SUM(CASE WHEN otif_category = 'Late' THEN 1 ELSE 0 END) as ordenes_late,
-# MAGIC   SUM(CASE WHEN otif_category = 'Short' THEN 1 ELSE 0 END) as ordenes_short,
-# MAGIC   SUM(CASE WHEN otif_category = 'Late&Short' THEN 1 ELSE 0 END) as ordenes_late_short,
-# MAGIC   
-# MAGIC   -- Clasificación del cliente por performance
-# MAGIC   CASE 
-# MAGIC     WHEN AVG(CASE WHEN is_otif THEN 100.0 ELSE 0.0 END) >= 95 THEN 'EXCELENTE'
-# MAGIC     WHEN AVG(CASE WHEN is_otif THEN 100.0 ELSE 0.0 END) >= 85 THEN 'BUENO'
-# MAGIC     WHEN AVG(CASE WHEN is_otif THEN 100.0 ELSE 0.0 END) >= 70 THEN 'REGULAR'
-# MAGIC     ELSE 'NECESITA_MEJORA'
-# MAGIC   END as categoria_cliente,
-# MAGIC   
-# MAGIC   -- Información temporal
-# MAGIC   MIN(order_date) as primera_orden,
-# MAGIC   MAX(order_date) as ultima_orden,
-# MAGIC   DATEDIFF(MAX(order_date), MIN(order_date)) + 1 as dias_como_cliente,
-# MAGIC   ROUND(COUNT(*) / (DATEDIFF(MAX(order_date), MIN(order_date)) + 1.0), 2) as ordenes_por_dia,
-# MAGIC   
-# MAGIC   -- Métricas de tendencia (últimos 30 días vs histórico)
-# MAGIC   ROUND(
-# MAGIC     AVG(CASE 
-# MAGIC       WHEN order_date >= current_date() - INTERVAL 30 DAYS AND is_otif 
-# MAGIC       THEN 100.0 ELSE 0.0 
-# MAGIC     END), 2
-# MAGIC   ) as otif_ultimos_30_dias,
-# MAGIC   
-# MAGIC   -- Plantas más utilizadas
-# MAGIC   FIRST_VALUE(plant_name) OVER (
-# MAGIC     PARTITION BY cust_code 
-# MAGIC     ORDER BY COUNT(*) DESC
-# MAGIC   ) as planta_principal,
-# MAGIC   
-# MAGIC   -- Timestamp de actualización
-# MAGIC   current_timestamp() as updated_at
-# MAGIC
-# MAGIC FROM ${SILVER_MV_DESPACHOS_OTIF}
-# MAGIC WHERE order_date >= current_date() - INTERVAL 365 DAYS  -- Último año
-# MAGIC GROUP BY cust_code;
+# MAGIC SELECT * FROM g6_mkt_clientes.gold.vw_perfil_clientes
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT * FROM g6_cmc_pedidos.gold.vw_demanda_pedidos
